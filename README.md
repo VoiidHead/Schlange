@@ -2,9 +2,10 @@
 Schlange é um simples "jogo da cobrinha" feito por mim para testar habilidades com a biblioteca Pygame do Python  
 
 ## Como Jogar
-- WASD ou setas do teclado para guiar Schlange (a cobra)  
-- Esc para pausar
-- Enter e Espaço para 'confirmar' em menus (no caso da tela de *game over*, também é possível 'confirmar' com R)
+- WASD ou Setas: Movimentação  
+- Esc: Pausar Jogo (enquanto ele acontece)/Fechar Jogo (em menus)
+- Enter ou Espaço: 'Confirmar'
+- R: 'Confirmar' na tela de *game over*
 
 *obs.: é possível pular a animação de morte com enter ou espaço
 
