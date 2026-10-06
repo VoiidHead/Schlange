@@ -9,8 +9,8 @@ Schlange é um simples "jogo da cobrinha" feito por mim para testar habilidades 
 
 *obs.: é possível pular a animação de morte com enter ou espaço
 
-## Download do Jogo Compilado para Windows
-Você pode baixar o jogo como [executável para Windows](https://github.com/VoiidHead/Schlange/releases/tag/Build).
+## Download do Jogo Compilado
+Você pode baixar o jogo como [executável para Windows e para Linux](https://github.com/VoiidHead/Schlange/releases/tag/Build).
 
 ## Sobre o Código
 - O jogo foi feito com base na Community Edition do Pygame.  
