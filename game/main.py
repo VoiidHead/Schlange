@@ -4,6 +4,11 @@ import os
 import sys
 
 pygame.init()
+try:
+    pygame.mixer.init()
+    sound_enabled = True
+except pygame.error:
+    sound_enabled = False
 
 def resource_path(relative_path):
     try:
@@ -96,9 +101,10 @@ pygame.display.set_icon(pygame.transform.smoothscale(pygame.image.load(resource_
 
 reloju = pygame.time.Clock()
 
-ate = pygame.mixer.Sound(resource_path("sfx/hungrySchlange.wav"))
-dmg = pygame.mixer.Sound(resource_path("sfx/slicedSchlange.wav"))
-death = pygame.mixer.Sound(resource_path("sfx/SchlangeIsDead.wav"))
+if sound_enabled:
+    ate = pygame.mixer.Sound(resource_path("sfx/hungrySchlange.wav"))
+    dmg = pygame.mixer.Sound(resource_path("sfx/slicedSchlange.wav"))
+    death = pygame.mixer.Sound(resource_path("sfx/SchlangeIsDead.wav"))
 
 while True:
     reloju.tick(60)
@@ -108,6 +114,9 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
+
+        if event.type == pygame.WINDOWMINIMIZED:
+            paused = True
 
         if event.type == pygame.KEYDOWN:
 
@@ -137,6 +146,9 @@ while True:
                 else:
 
                     if event.key == pygame.K_ESCAPE:
+                        if pintos > besto:
+                            besto = pintos
+                            saveIt(besto)
                         pygame.quit()
                         sys.exit()
 
@@ -147,8 +159,16 @@ while True:
             elif gameState == 0.5:
 
                 if event.key in [pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER]:
-                    death.play()
+                    if sound_enabled:
+                        death.play()
                     gameState = 1
+
+                if event.key == pygame.K_ESCAPE:
+                    if pintos > besto:
+                        besto = pintos
+                        saveIt(besto)
+                    pygame.quit()
+                    sys.exit()
 
             elif gameState == 1:
 
@@ -212,7 +232,8 @@ while True:
                         Apfel.x = randint(Apfel.r, mona.w - Apfel.r)
                         Apfel.y = randint(Apfel.r, mona.h - Apfel.r)
 
-                    ate.play()
+                    if sound_enabled:
+                        ate.play()
                     Schlange.tamain += 1
                     pintos += 1
 
@@ -265,11 +286,13 @@ while True:
                     for _ in range(min(6, len(body))):
                         del body[0]
 
-                    dmg.play()
+                    if sound_enabled:
+                        dmg.play()
 
                 else:
 
-                    death.play()
+                    if sound_enabled:
+                        death.play()
                     gameState = 1
 
             bigBoy(body, False)
