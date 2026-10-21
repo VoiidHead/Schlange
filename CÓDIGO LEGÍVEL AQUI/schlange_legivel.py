@@ -1,557 +1,410 @@
-import pygame
-from random import randint
 import os
 import sys
+from random import randint
 
+import pygame
+
+# ---------------------------------------------------------------------------
+# Inicialização do pygame
+# ---------------------------------------------------------------------------
 pygame.init()
 
+# Tenta inicializar o mixer de áudio; se falhar, o jogo continua sem som.
+try:
+    pygame.mixer.init()
+    som_ativado = True
+except pygame.error:
+    som_ativado = False
 
-# Encontra o caminho correto dos arquivos, inclusive quando o jogo
-# estiver sendo executado como um executável criado pelo PyInstaller.
-def resource_path(relative_path):
+
+# ---------------------------------------------------------------------------
+# Funções auxiliares
+# ---------------------------------------------------------------------------
+def caminho_recurso(caminho_relativo):
+    """
+    Resolve caminhos de arquivos para funcionar tanto em execução normal
+    quanto em versão empacotada.
+    """
     try:
-        base_path = sys._MEIPASS
+        base = sys._MEIPASS
     except AttributeError:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+        base = os.path.abspath(".")
+    return os.path.join(base, caminho_relativo)
 
 
-# Cria uma pasta para salvar os dados do jogo dentro do AppData.
-pasta_save = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Schlange")
-os.makedirs(pasta_save, exist_ok=True)
-
-arquivo_recorde = os.path.join(pasta_save, "besto.txt")
-
-
-# Salva o recorde no arquivo.
-def salvar_recorde(recorde):
-    with open(arquivo_recorde, "w") as arquivo:
-        arquivo.write(str(recorde))
+# Pasta de armazenamento do recorde
+pasta_salvamento = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Schlange")
+os.makedirs(pasta_salvamento, exist_ok=True)
+arquivo_recorde = os.path.join(pasta_salvamento, "besto.txt")
 
 
-# Carrega o recorde salvo.
-# Se o arquivo não existir ou estiver inválido, retorna 0.
+def salvar_recorde(valor):
+    with open(arquivo_recorde, "w", encoding="utf-8") as arquivo:
+        arquivo.write(str(valor))
+
+
 def carregar_recorde():
     try:
-        with open(arquivo_recorde, "r") as arquivo:
+        with open(arquivo_recorde, "r", encoding="utf-8") as arquivo:
             return int(arquivo.read())
     except (FileNotFoundError, ValueError):
         return 0
 
 
-# Classe que guarda as dimensões da janela.
-class Janela:
+# ---------------------------------------------------------------------------
+# Configurações do jogo
+# ---------------------------------------------------------------------------
+class TelaJogo:
     largura = 640
     altura = 480
 
 
-# Classe que guarda as informações da cobra.
 class Cobra:
     largura = 25
     altura = 25
-
-    x = (Janela.largura / 2) - (largura / 2)
-    y = (Janela.altura / 2) - (altura / 2)
-
+    x = (TelaJogo.largura / 2) - (largura / 2)
+    y = (TelaJogo.altura / 2) - (altura / 2)
     velocidade = 5
-
-    # A cobra começa parada.
-    direcao = None
-
+    direcao = "parado"
     tamanho = 1
 
 
-# Classe que guarda as informações da maçã.
 class Maca:
     raio = 20
-    x = randint(raio, Janela.largura - raio)
-    y = randint(raio, Janela.altura - raio)
+    x = randint(raio, TelaJogo.largura - raio)
+    y = randint(raio, TelaJogo.altura - raio)
 
 
-# Verifica se um retângulo e um círculo estão colidindo.
-def colisao_circulo(retangulo, centro_x, centro_y, raio):
+# ---------------------------------------------------------------------------
+# Lógica de colisão
+# ---------------------------------------------------------------------------
+def colisao_circulo_retangulo(retangulo, centro_x, centro_y, raio):
+    """
+    Verifica se um círculo colidiu com um retângulo.
+    """
     ponto_x = max(retangulo.left, min(centro_x, retangulo.right))
     ponto_y = max(retangulo.top, min(centro_y, retangulo.bottom))
 
-    distancia_x = centro_x - ponto_x
-    distancia_y = centro_y - ponto_y
+    dx = centro_x - ponto_x
+    dy = centro_y - ponto_y
 
-    return distancia_x**2 + distancia_y**2 <= raio**2
-
-
-# Desenha o corpo da cobra.
-# Quando o jogo está pausado, o corpo fica com uma cor diferente.
-def desenhar_corpo(corpo, pausado):
-    if not pausado:
-        for posicao in corpo[:-1]:
-            pygame.draw.rect(monitor, (255, 212, 59), (posicao[0], posicao[1], Cobra.largura, Cobra.altura))
-    else:
-        for posicao in corpo[:-1]:
-            pygame.draw.rect(monitor, (205, 162, 9), (posicao[0], posicao[1], Cobra.largura, Cobra.altura))
+    return (dx ** 2) + (dy ** 2) <= (raio ** 2)
 
 
-# Reinicia todos os valores necessários para começar uma nova partida.
+def desenhar_corpo(corpo_cobra, pausado):
+    """
+    Desenha o corpo da cobra.
+    Quando pausado, o corpo fica mais escuro.
+    """
+    cor = (255, 212, 59) if not pausado else (205, 162, 9)
+
+    for posicao in corpo_cobra[:-1]:
+        pygame.draw.rect(
+            tela_jogo,
+            cor,
+            (posicao[0], posicao[1], Cobra.largura, Cobra.altura),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Reinício do jogo
+# ---------------------------------------------------------------------------
 def reiniciar_jogo():
-    global pontuacao, contador_morte, estado_jogo, pausado, novo_recorde
+    global pontos, tempo_animacao, estado_jogo, pausado, novo_recorde
 
-    Cobra.x = (Janela.largura / 2) - (Cobra.largura / 2)
-    Cobra.y = (Janela.altura / 2) - (Cobra.altura / 2)
-
+    Cobra.x = (TelaJogo.largura / 2) - (Cobra.largura / 2)
+    Cobra.y = (TelaJogo.altura / 2) - (Cobra.altura / 2)
     Cobra.tamanho = 1
-    Cobra.direcao = None
+    Cobra.direcao = "parado"
 
-    corpo.clear()
+    corpo_cobra.clear()
 
-    pontuacao = 0
+    pontos = 0
     novo_recorde = False
-    contador_morte = 0
+    tempo_animacao = 0
     pausado = False
 
-    Maca.x = randint(Maca.raio, Janela.largura - Maca.raio)
-    Maca.y = randint(Maca.raio, Janela.altura - Maca.raio)
+    Maca.x = randint(Maca.raio, TelaJogo.largura - Maca.raio)
+    Maca.y = randint(Maca.raio, TelaJogo.altura - Maca.raio)
 
-    estado_jogo = 0
+    estado_jogo = "jogando"
 
 
-# Valores iniciais do jogo.
-pontuacao = 0
+# ---------------------------------------------------------------------------
+# Estados do jogo em strings
+# ---------------------------------------------------------------------------
+ESTADO_JOGANDO = "jogando"
+ESTADO_ANIMACAO = "animacao"
+ESTADO_GAME_OVER = "game_over"
+
+# ---------------------------------------------------------------------------
+# Variáveis globais do jogo
+# ---------------------------------------------------------------------------
+pontos = 0
 recorde = carregar_recorde()
-corpo = []
-
+corpo_cobra = []
 novo_recorde = False
+ultima_direcao = "direita"
 
-# Guarda a última direção antes de pausar.
-# Ela só é atualizada quando o jogo é pausado.
-ultima_direcao = None
+# Fontes
+fonte = pygame.font.SysFont("Tahoma", 24)
+texto_fechar = fonte.render("esc para fechar o jogo", True, (255, 255, 255))
+texto_game_over = fonte.render("ESTÁ MORTO!", True, (255, 255, 255))
+texto_novo_recorde = fonte.render("NOVO RECORDE!!", True, (255, 255, 255))
 
-
-# Fontes e textos usados pelo jogo.
-fonte_tahoma = pygame.font.SysFont("Tahoma", 24)
-
-texto_esc = fonte_tahoma.render("esc para fechar o jogo", True, (255, 255, 255))
-texto_game_over = fonte_tahoma.render("ESTÁ MORTO!", True, (255, 255, 255))
-texto_novo_recorde = fonte_tahoma.render("NOVO RECORDE!!", True, (255, 255, 255))
-
-
-# Estados possíveis do jogo:
-# 0   = jogo normal
-# 0.5 = animação da morte
-# 1   = tela de game over
-estado_jogo = 0
-
+estado_jogo = ESTADO_JOGANDO
 pausado = False
-contador_morte = 0
+tempo_animacao = 0
 
-
-# Criação da janela.
-monitor = pygame.display.set_mode((Janela.largura, Janela.altura))
+# Janela principal
+tela_jogo = pygame.display.set_mode((TelaJogo.largura, TelaJogo.altura))
 pygame.display.set_caption("Schlange")
 
-pygame.display.set_icon(pygame.transform.smoothscale(pygame.image.load(resource_path("icon/icon.png")), (32, 32)))
+# Ícone do jogo
+icone = pygame.transform.smoothscale(
+    pygame.image.load(caminho_recurso("icon/icon.png")),
+    (32, 32),
+)
+pygame.display.set_icon(icone)
 
-
-# Relógio usado para limitar o jogo a 60 FPS.
 relogio = pygame.time.Clock()
 
+# Sons
+if som_ativado:
+    som_comer = pygame.mixer.Sound(caminho_recurso("sfx/hungrySchlange.wav"))
+    som_dano = pygame.mixer.Sound(caminho_recurso("sfx/slicedSchlange.wav"))
+    som_morte = pygame.mixer.Sound(caminho_recurso("sfx/SchlangeIsDead.wav"))
 
-# Efeitos sonoros.
-som_comer = pygame.mixer.Sound(resource_path("sfx/hungrySchlange.wav"))
-som_dano = pygame.mixer.Sound(resource_path("sfx/slicedSchlange.wav"))
-som_morte = pygame.mixer.Sound(resource_path("sfx/SchlangeIsDead.wav"))
 
-
-# Loop principal do jogo.
+# ---------------------------------------------------------------------------
+# Loop principal
+# ---------------------------------------------------------------------------
 while True:
-
-    # Mantém o jogo em 60 FPS.
     relogio.tick(60)
 
-
-    # Processa os eventos do teclado, fechamento da janela etc.
+    # Captura eventos
     for evento in pygame.event.get():
-
-        # Fechar a janela.
         if evento.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
 
+        if evento.type == pygame.WINDOWMINIMIZED:
+            pausado = True
 
         if evento.type == pygame.KEYDOWN:
-
-            # =========================================================
-            # JOGO NORMAL
-            # =========================================================
-            if estado_jogo == 0:
-
-                # Se o jogo não estiver pausado, podemos movimentar a cobra.
+            if estado_jogo == ESTADO_JOGANDO:
                 if not pausado:
-
-                    # ESC pausa o jogo.
                     if evento.key == pygame.K_ESCAPE:
                         pausado = True
 
-
-                    # W ou seta para cima.
-                    # A cobra não pode voltar diretamente para baixo.
                     elif evento.key in [pygame.K_w, pygame.K_UP]:
                         if Cobra.direcao != "baixo":
                             Cobra.direcao = "cima"
 
-
-                    # A ou seta para esquerda.
-                    # A cobra não pode voltar diretamente para direita.
                     elif evento.key in [pygame.K_a, pygame.K_LEFT]:
                         if Cobra.direcao != "direita":
                             Cobra.direcao = "esquerda"
 
-
-                    # S ou seta para baixo.
-                    # A cobra não pode voltar diretamente para cima.
                     elif evento.key in [pygame.K_s, pygame.K_DOWN]:
                         if Cobra.direcao != "cima":
                             Cobra.direcao = "baixo"
 
-
-                    # D ou seta para direita.
-                    # A cobra não pode voltar diretamente para esquerda.
                     elif evento.key in [pygame.K_d, pygame.K_RIGHT]:
                         if Cobra.direcao != "esquerda":
                             Cobra.direcao = "direita"
 
-
-                # Se o jogo estiver pausado.
                 else:
-
-                    # ESC fecha o jogo.
                     if evento.key == pygame.K_ESCAPE:
+                        if pontos > recorde:
+                            recorde = pontos
+                            salvar_recorde(recorde)
                         pygame.quit()
                         sys.exit()
 
-
-                    # Espaço ou Enter continua o jogo.
                     elif evento.key in [pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER]:
                         Cobra.direcao = ultima_direcao
                         pausado = False
 
-
-            # =========================================================
-            # ANIMAÇÃO DA MORTE
-            # =========================================================
-            elif estado_jogo == 0.5:
-
-                # Quando o jogador aperta uma tecla, o som de morte
-                # é reproduzido e a tela de game over aparece.
+            elif estado_jogo == ESTADO_ANIMACAO:
                 if evento.key in [pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER]:
-                    som_morte.play()
-                    estado_jogo = 1
+                    if som_ativado:
+                        som_morte.play()
+                    estado_jogo = ESTADO_GAME_OVER
 
+                if evento.key == pygame.K_ESCAPE:
+                    if pontos > recorde:
+                        recorde = pontos
+                        salvar_recorde(recorde)
+                    pygame.quit()
+                    sys.exit()
 
-            # =========================================================
-            # GAME OVER
-            # =========================================================
-            elif estado_jogo == 1:
-
-                # R, Espaço ou Enter reinicia o jogo.
+            elif estado_jogo == ESTADO_GAME_OVER:
                 if evento.key in [pygame.K_r, pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER]:
                     reiniciar_jogo()
 
-
-                # ESC fecha o jogo.
                 elif evento.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
 
-
-    # =============================================================
-    # ESTADOS DO JOGO
-    # =============================================================
-
+    # -----------------------------------------------------------------------
+    # Verificação do estado do jogo
+    # -----------------------------------------------------------------------
     match estado_jogo:
-
-        # =========================================================
-        # JOGO NORMAL
-        # =========================================================
-        case 0:
-
-            # Tudo dentro deste bloco só acontece enquanto o jogo
-            # não estiver pausado.
+        case ESTADO_JOGANDO:
             if not pausado:
+                tela_jogo.fill((0, 190, 0))
+                texto_pontuacao = fonte.render(f"Pontuação: {pontos}", True, (255, 255, 255), (0, 0, 0))
 
-                # Fundo verde.
-                monitor.fill((0, 190, 0))
+                # Movimento da cobra
+                if Cobra.direcao == "cima":
+                    Cobra.y -= Cobra.velocidade
+                elif Cobra.direcao == "esquerda":
+                    Cobra.x -= Cobra.velocidade
+                elif Cobra.direcao == "baixo":
+                    Cobra.y += Cobra.velocidade
+                elif Cobra.direcao == "direita":
+                    Cobra.x += Cobra.velocidade
 
-
-                # Texto da pontuação.
-                texto_pontuacao = fonte_tahoma.render(f"Pontuação: {pontuacao}", True, (255, 255, 255), (0, 0, 0))
-
-
-                # -------------------------------------------------
-                # MOVIMENTO DA COBRA
-                # -------------------------------------------------
-
-                match Cobra.direcao:
-
-                    case "cima":
-                        Cobra.y -= Cobra.velocidade
-
-                    case "esquerda":
-                        Cobra.x -= Cobra.velocidade
-
-                    case "baixo":
-                        Cobra.y += Cobra.velocidade
-
-                    case "direita":
-                        Cobra.x += Cobra.velocidade
-
-
-                # -------------------------------------------------
-                # TELETRANSPORTE PELAS BORDAS
-                # -------------------------------------------------
-
-                # Se a cobra sair pela direita, aparece pela esquerda.
-                if Cobra.x >= Janela.largura:
+                # Teleporte da borda para o lado oposto
+                if Cobra.x >= TelaJogo.largura:
                     Cobra.x = 0
-
-                # Se sair pela esquerda, aparece pela direita.
                 elif Cobra.x < 0:
-                    Cobra.x = Janela.largura
+                    Cobra.x = TelaJogo.largura
 
-
-                # Se sair por baixo, aparece em cima.
-                if Cobra.y >= Janela.altura:
+                if Cobra.y >= TelaJogo.altura:
                     Cobra.y = 0
-
-                # Se sair por cima, aparece embaixo.
                 elif Cobra.y < 0:
-                    Cobra.y = Janela.altura
+                    Cobra.y = TelaJogo.altura
 
+                # Guarda a posição atual da cabeça no corpo
+                corpo_cobra.append([Cobra.x, Cobra.y])
 
-                # Adiciona a posição atual da cabeça ao corpo.
-                corpo.append([Cobra.x, Cobra.y])
+                # Limita o tamanho do corpo
+                if len(corpo_cobra) > Cobra.tamanho * 6:
+                    del corpo_cobra[0]
 
+                # Desenha o corpo
+                if Cobra.direcao != "parado":
+                    desenhar_corpo(corpo_cobra, False)
 
-                # O corpo precisa ter uma quantidade limitada de posições.
-                # Quanto maior a cobra, mais posições são mantidas.
-                if len(corpo) > Cobra.tamanho * 6:
-                    del corpo[0]
+                # Cabeça da cobra
+                retangulo_cobra = pygame.draw.rect(
+                    tela_jogo,
+                    (48, 105, 152),
+                    (Cobra.x, Cobra.y, Cobra.largura, Cobra.altura),
+                )
 
+                # Maçã
+                pygame.draw.circle(tela_jogo, (255, 0, 0), (Maca.x, Maca.y), Maca.raio)
 
-                # Só desenha a cobra quando ela já tiver uma direção.
-                if Cobra.direcao is not None:
-                    desenhar_corpo(corpo, False)
+                # Colisão com a maçã
+                if colisao_circulo_retangulo(retangulo_cobra, Maca.x, Maca.y, Maca.raio):
+                    Maca.x = randint(Maca.raio, TelaJogo.largura - Maca.raio)
+                    Maca.y = randint(Maca.raio, TelaJogo.altura - Maca.raio)
 
+                    while colisao_circulo_retangulo(retangulo_cobra, Maca.x, Maca.y, Maca.raio):
+                        Maca.x = randint(Maca.raio, TelaJogo.largura - Maca.raio)
+                        Maca.y = randint(Maca.raio, TelaJogo.altura - Maca.raio)
 
-                # Desenha a cabeça da cobra.
-                cabeca_cobra = pygame.draw.rect(monitor, (48, 105, 152), (Cobra.x, Cobra.y, Cobra.largura, Cobra.altura))
+                    if som_ativado:
+                        som_comer.play()
 
-
-                # Desenha a maçã.
-                pygame.draw.circle(monitor, (255, 0, 0), (Maca.x, Maca.y), Maca.raio)
-
-
-                # -------------------------------------------------
-                # COMER A MAÇÃ
-                # -------------------------------------------------
-
-                if colisao_circulo(cabeca_cobra, Maca.x, Maca.y, Maca.raio):
-
-                    # Escolhe uma nova posição para a maçã.
-                    Maca.x = randint(Maca.raio, Janela.largura - Maca.raio)
-                    Maca.y = randint(Maca.raio, Janela.altura - Maca.raio)
-
-
-                    # Garante que a nova maçã não apareça dentro da cobra.
-                    while colisao_circulo(cabeca_cobra, Maca.x, Maca.y, Maca.raio):
-                        Maca.x = randint(Maca.raio, Janela.largura - Maca.raio)
-                        Maca.y = randint(Maca.raio, Janela.altura - Maca.raio)
-
-
-                    # Toca o som de comer.
-                    som_comer.play()
-
-                    # Aumenta o tamanho da cobra e a pontuação.
                     Cobra.tamanho += 1
-                    pontuacao += 1
+                    pontos += 1
 
+                # Verifica colisão com o próprio corpo
+                if corpo_cobra.count([Cobra.x, Cobra.y]) > 1 and Cobra.direcao != "parado":
+                    Cobra.direcao = "parado"
+                    estado_jogo = ESTADO_ANIMACAO
 
-                # -------------------------------------------------
-                # COLISÃO COM O PRÓPRIO CORPO
-                # -------------------------------------------------
-
-                # Se a posição atual da cabeça aparecer mais de uma vez
-                # no corpo, a cobra bateu nela mesma.
-                if corpo.count([Cobra.x, Cobra.y]) > 1 and Cobra.direcao is not None:
-
-                    # Para a cobra.
-                    Cobra.direcao = None
-
-                    # Vai para a animação da morte.
-                    estado_jogo = 0.5
-
-
-                # Desenha a pontuação na tela.
-                monitor.blit(texto_pontuacao, (20, Janela.altura - 462))
-
-                # Atualiza a tela.
+                tela_jogo.blit(texto_pontuacao, (20, TelaJogo.altura - 462))
                 pygame.display.flip()
 
-
-            # =====================================================
-            # JOGO PAUSADO
-            # =====================================================
             else:
+                # Tela de pausa
+                tela_jogo.fill((0, 140, 0))
+                texto_pontuacao_pausada = fonte.render(f"Pontuação: {pontos}", True, (175, 175, 175), (0, 0, 0))
+                texto_pausa = fonte.render("pause", True, (255, 255, 255))
+                posicao_pausa = texto_pausa.get_rect(center=(TelaJogo.largura / 2, TelaJogo.altura / 2))
 
-                # Fundo verde mais escuro.
-                monitor.fill((0, 140, 0))
-
-
-                # Pontuação fica acinzentada durante a pausa.
-                texto_pontuacao = fonte_tahoma.render(f"Pontuação: {pontuacao}", True, (175, 175, 175), (0, 0, 0))
-
-
-                # Texto "pause".
-                texto_pausa = fonte_tahoma.render("pause", True, (255, 255, 255))
-                posicao_pausa = texto_pausa.get_rect(center=(Janela.largura / 2, Janela.altura / 2))
-
-
-                # Guarda a direção que a cobra estava seguindo antes
-                # de ser pausada.
+                # Guarda a última direção válida
                 if Cobra.direcao == "cima":
                     ultima_direcao = "cima"
-
                 elif Cobra.direcao == "esquerda":
                     ultima_direcao = "esquerda"
-
                 elif Cobra.direcao == "baixo":
                     ultima_direcao = "baixo"
-
                 elif Cobra.direcao == "direita":
                     ultima_direcao = "direita"
 
+                Cobra.direcao = "parado"
 
-                # A cobra fica parada enquanto o jogo está pausado.
-                Cobra.direcao = None
+                desenhar_corpo(corpo_cobra, True)
+                pygame.draw.rect(
+                    tela_jogo,
+                    (48, 105, 152),
+                    (Cobra.x, Cobra.y, Cobra.largura, Cobra.altura),
+                )
+                pygame.draw.circle(tela_jogo, (175, 0, 0), (Maca.x, Maca.y), Maca.raio)
 
-
-                # Desenha o corpo com a cor da pausa.
-                desenhar_corpo(corpo, True)
-
-
-                # Desenha a cabeça.
-                pygame.draw.rect(monitor, (48, 105, 152), (Cobra.x, Cobra.y, Cobra.largura, Cobra.altura))
-
-
-                # Desenha a maçã com uma cor mais escura.
-                pygame.draw.circle(monitor, (175, 0, 0), (Maca.x, Maca.y), Maca.raio)
-
-
-                # Desenha a pontuação e as instruções.
-                monitor.blit(texto_pontuacao, (20, Janela.altura - 462))
-                monitor.blit(texto_pausa, posicao_pausa)
-                monitor.blit(texto_esc, (1, Janela.altura - 30))
-
-
-                # Atualiza a tela.
+                tela_jogo.blit(texto_pontuacao_pausada, (20, TelaJogo.altura - 462))
+                tela_jogo.blit(texto_pausa, posicao_pausa)
+                tela_jogo.blit(texto_fechar, (1, TelaJogo.altura - 30))
                 pygame.display.flip()
 
+        case ESTADO_ANIMACAO:
+            # Animação de colisão
+            tela_jogo.fill((0, 190, 0))
+            tempo_animacao += 1
 
-        # =========================================================
-        # ANIMAÇÃO DA MORTE
-        # =========================================================
-        case 0.5:
+            if tempo_animacao == 30:
+                tempo_animacao = 0
 
-            # Fundo verde.
-            monitor.fill((0, 190, 0))
+                if len(corpo_cobra) > 1:
+                    for _ in range(min(6, len(corpo_cobra))):
+                        del corpo_cobra[0]
 
-
-            # Aumenta o contador a cada frame.
-            contador_morte += 1
-
-
-            # A cada 30 frames, remove uma parte do corpo.
-            if contador_morte == 30:
-
-                contador_morte = 0
-
-
-                # Se ainda houver mais de uma parte do corpo,
-                # remove até seis partes.
-                if len(corpo) > 1:
-
-                    for _ in range(min(6, len(corpo))):
-                        del corpo[0]
-
-                    # Toca o som de dano.
-                    som_dano.play()
-
-
-                # Quando o corpo acaba, vai para o game over.
+                    if som_ativado:
+                        som_dano.play()
                 else:
-                    som_morte.play()
-                    estado_jogo = 1
+                    if som_ativado:
+                        som_morte.play()
+                    estado_jogo = ESTADO_GAME_OVER
 
+            desenhar_corpo(corpo_cobra, False)
+            pygame.draw.rect(
+                tela_jogo,
+                (48, 105, 152),
+                (Cobra.x, Cobra.y, Cobra.largura, Cobra.altura),
+            )
+            pygame.draw.circle(tela_jogo, (255, 0, 0), (Maca.x, Maca.y), Maca.raio)
 
-            # Desenha o corpo e a cabeça durante a animação.
-            desenhar_corpo(corpo, False)
-
-            pygame.draw.rect(monitor, (48, 105, 152), (Cobra.x, Cobra.y, Cobra.largura, Cobra.altura))
-
-            pygame.draw.circle(monitor, (255, 0, 0), (Maca.x, Maca.y), Maca.raio)
-
-
-            # Atualiza a tela.
             pygame.display.flip()
 
+        case ESTADO_GAME_OVER:
+            # Tela de game over
+            tela_jogo.fill((0, 0, 0))
 
-        # =========================================================
-        # GAME OVER
-        # =========================================================
-        case 1:
-
-            # Fundo preto.
-            monitor.fill((0, 0, 0))
-
-
-            # Verifica se o jogador conseguiu um novo recorde.
-            if pontuacao > recorde and not novo_recorde:
-
-                recorde = pontuacao
+            if pontos > recorde and not novo_recorde:
+                recorde = pontos
                 salvar_recorde(recorde)
-
                 novo_recorde = True
 
+            texto_pontuacao = fonte.render(f"Pontuação: {pontos}", True, (255, 255, 255))
+            texto_recorde = fonte.render(f"Recorde: {recorde}", True, (255, 255, 255))
 
-            # Cria os textos da tela de game over.
-            texto_pontuacao = fonte_tahoma.render(f"Pontuação: {pontuacao}", True, (255, 255, 255))
-
-            texto_recorde = fonte_tahoma.render(f"Recorde: {recorde}", True, (255, 255, 255))
-
-
-            # Calcula as posições dos textos.
-            posicao_pontuacao = texto_pontuacao.get_rect(center=(Janela.largura / 2, Janela.altura / 2))
-
+            posicao_pontuacao = texto_pontuacao.get_rect(center=(TelaJogo.largura / 2, TelaJogo.altura / 2))
             posicao_game_over = texto_game_over.get_rect(midbottom=(posicao_pontuacao.centerx, posicao_pontuacao.top - 10))
-
             posicao_recorde = texto_recorde.get_rect(midtop=(posicao_pontuacao.centerx, posicao_pontuacao.bottom + 10))
-
             posicao_novo_recorde = texto_novo_recorde.get_rect(midtop=(posicao_pontuacao.centerx, posicao_pontuacao.bottom + 10))
 
+            tela_jogo.blit(texto_game_over, posicao_game_over)
+            tela_jogo.blit(texto_pontuacao, posicao_pontuacao)
+            tela_jogo.blit(texto_fechar, (1, TelaJogo.altura - 30))
 
-            # Desenha "ESTÁ MORTO!" e a pontuação.
-            monitor.blit(texto_game_over, posicao_game_over)
-            monitor.blit(texto_pontuacao, posicao_pontuacao)
-
-            # Mostra a instrução para fechar o jogo.
-            monitor.blit(texto_esc, (1, Janela.altura - 30))
-
-
-            # Se bateu o recorde, mostra a mensagem de novo recorde.
-            # Caso contrário, mostra o recorde normalmente.
             if novo_recorde:
-                monitor.blit(texto_novo_recorde, posicao_novo_recorde)
+                tela_jogo.blit(texto_novo_recorde, posicao_novo_recorde)
             else:
-                monitor.blit(texto_recorde, posicao_recorde)
+                tela_jogo.blit(texto_recorde, posicao_recorde)
 
-
-            # Atualiza a tela.
             pygame.display.flip()
