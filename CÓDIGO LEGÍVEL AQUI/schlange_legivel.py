@@ -131,11 +131,11 @@ def reiniciar_jogo():
 
 
 # ---------------------------------------------------------------------------
-# Estados do jogo em strings
+# Possíveis estados da variável principal:
+# - "jogando": o jogo está em execução
+# - "animacao": a cobra colidiu e a animação de morte está em andamento
+# - "game_over": a tela de fim de jogo está ativa
 # ---------------------------------------------------------------------------
-ESTADO_JOGANDO = "jogando"
-ESTADO_ANIMACAO = "animacao"
-ESTADO_GAME_OVER = "game_over"
 
 # ---------------------------------------------------------------------------
 # Variáveis globais do jogo
@@ -152,7 +152,7 @@ texto_fechar = fonte.render("esc para fechar o jogo", True, (255, 255, 255))
 texto_game_over = fonte.render("ESTÁ MORTO!", True, (255, 255, 255))
 texto_novo_recorde = fonte.render("NOVO RECORDE!!", True, (255, 255, 255))
 
-estado_jogo = ESTADO_JOGANDO
+estado_jogo = "jogando"
 pausado = False
 tempo_animacao = 0
 
@@ -192,7 +192,7 @@ while True:
             pausado = True
 
         if evento.type == pygame.KEYDOWN:
-            if estado_jogo == ESTADO_JOGANDO:
+            if estado_jogo == "jogando":
                 if not pausado:
                     if evento.key == pygame.K_ESCAPE:
                         pausado = True
@@ -225,11 +225,11 @@ while True:
                         Cobra.direcao = ultima_direcao
                         pausado = False
 
-            elif estado_jogo == ESTADO_ANIMACAO:
+            elif estado_jogo == "animacao":
                 if evento.key in [pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER]:
                     if som_ativado:
                         som_morte.play()
-                    estado_jogo = ESTADO_GAME_OVER
+                    estado_jogo = "game_over"
 
                 if evento.key == pygame.K_ESCAPE:
                     if pontos > recorde:
@@ -238,7 +238,7 @@ while True:
                     pygame.quit()
                     sys.exit()
 
-            elif estado_jogo == ESTADO_GAME_OVER:
+            elif estado_jogo == "game_over":
                 if evento.key in [pygame.K_r, pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER]:
                     reiniciar_jogo()
 
@@ -250,7 +250,7 @@ while True:
     # Verificação do estado do jogo
     # -----------------------------------------------------------------------
     match estado_jogo:
-        case ESTADO_JOGANDO:
+        case "jogando":
             if not pausado:
                 tela_jogo.fill((0, 190, 0))
                 texto_pontuacao = fonte.render(f"Pontuação: {pontos}", True, (255, 255, 255), (0, 0, 0))
@@ -315,7 +315,7 @@ while True:
                 # Verifica colisão com o próprio corpo
                 if corpo_cobra.count([Cobra.x, Cobra.y]) > 1 and Cobra.direcao != "parado":
                     Cobra.direcao = "parado"
-                    estado_jogo = ESTADO_ANIMACAO
+                    estado_jogo = "animacao"
 
                 tela_jogo.blit(texto_pontuacao, (20, TelaJogo.altura - 462))
                 pygame.display.flip()
@@ -352,7 +352,7 @@ while True:
                 tela_jogo.blit(texto_fechar, (1, TelaJogo.altura - 30))
                 pygame.display.flip()
 
-        case ESTADO_ANIMACAO:
+        case "animacao":
             # Animação de colisão
             tela_jogo.fill((0, 190, 0))
             tempo_animacao += 1
@@ -369,7 +369,7 @@ while True:
                 else:
                     if som_ativado:
                         som_morte.play()
-                    estado_jogo = ESTADO_GAME_OVER
+                    estado_jogo = "game_over"
 
             desenhar_corpo(corpo_cobra, False)
             pygame.draw.rect(
@@ -381,7 +381,7 @@ while True:
 
             pygame.display.flip()
 
-        case ESTADO_GAME_OVER:
+        case "game_over":
             # Tela de game over
             tela_jogo.fill((0, 0, 0))
 
