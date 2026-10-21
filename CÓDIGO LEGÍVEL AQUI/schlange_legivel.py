@@ -128,10 +128,8 @@ def reiniciar_jogo():
     Maca.y = randint(Maca.raio, TelaJogo.altura - Maca.raio)
 
     estado_jogo = "jogando"
-
-
 # ---------------------------------------------------------------------------
-# Possíveis estados da variável principal:
+# Possíveis estados da variável estado_jogo:
 # - "jogando": o jogo está em execução
 # - "animacao": a cobra colidiu e a animação de morte está em andamento
 # - "game_over": a tela de fim de jogo está ativa
